@@ -1,0 +1,462 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="content-security-policy" content="script-src 'self' 'unsafe-inline'" />
+    <title>Token Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #0d0d0d;
+            color: #e8e8e8;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            padding: 12px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .header-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .status-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #22c55e;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+        /* ── Total cost hero ── */
+        .total-cost-box {
+            background: #161616;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+        }
+        .total-cost-label { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+        .total-cost-value { font-size: 22px; font-weight: 800; color: #a78bfa; letter-spacing: -.02em; }
+        .total-calls { color: #555; font-size: 10px; }
+
+        /* ── Progress ── */
+        .progress-section { margin-bottom: 8px; }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            color: #555;
+            font-size: 10px;
+        }
+        .progress-bar-track {
+            background: #1a1a1a;
+            border-radius: 3px;
+            height: 5px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: #3b82f6;
+            transition: width .4s ease, background .3s;
+            width: 0%;
+        }
+        .progress-bar-fill.warn { background: #d4a017; }
+        .progress-bar-fill.danger { background: #ef4444; }
+
+        /* ── Section title ── */
+        .section-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: .09em;
+            margin: 10px 0 5px;
+            padding-top: 8px;
+            border-top: 1px solid #1c1c1c;
+        }
+
+        /* ── Stat table rows ── */
+        .stat-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+        .stat-table tr td {
+            padding: 3px 0;
+            border-bottom: 1px solid #191919;
+        }
+        .stat-table tr:last-child td { border-bottom: none; }
+        .stat-key { color: #555; font-size: 10px; width: 55%; }
+        .stat-val { color: #d0d0d0; font-size: 11px; font-weight: 600; text-align: right; }
+        .stat-val.green  { color: #22c55e; }
+        .stat-val.blue   { color: #3b82f6; }
+        .stat-val.orange { color: #f97316; }
+        .stat-val.purple { color: #a78bfa; }
+        .stat-val.red    { color: #ef4444; }
+
+        /* ── Cost line ── */
+        .cost-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #161616;
+            border: 1px solid #222;
+            border-radius: 6px;
+            padding: 5px 10px;
+            margin-bottom: 4px;
+        }
+        .cost-line-label { color: #555; font-size: 10px; }
+        .cost-line-value { font-size: 13px; font-weight: 700; color: #a78bfa; }
+
+        /* ── Cache pills ── */
+        .cache-row { display: flex; gap: 5px; margin-bottom: 6px; }
+        .cache-pill {
+            flex: 1;
+            background: #161616;
+            border-radius: 6px;
+            padding: 5px 6px;
+            text-align: center;
+        }
+        .cache-pill.hit  { border: 1px solid #14532d; }
+        .cache-pill.write{ border: 1px solid #1e3a5f; }
+        .cache-pill.miss { border: 1px solid #7c2d12; }
+        .pill-label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1px; }
+        .pill-value { font-size: 14px; font-weight: 700; }
+        .pill-value.green  { color: #22c55e; }
+        .pill-value.blue   { color: #3b82f6; }
+        .pill-value.orange { color: #f97316; }
+
+        /* ── Controls ── */
+        .controls { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
+        button {
+            background: #1a1a1a;
+            border: 1px solid #2e2e2e;
+            color: #bbb;
+            border-radius: 4px;
+            padding: 4px 9px;
+            font-size: 10px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        button:hover { background: #222; border-color: #444; color: #eee; }
+
+        /* ── Sliders ── */
+        .slider-section { margin-top: 6px; }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 5px;
+        }
+        .slider-label { color: #555; width: 100px; font-size: 10px; flex-shrink: 0; }
+        input[type=range] {
+            flex: 1;
+            accent-color: #3b82f6;
+            height: 3px;
+            cursor: pointer;
+        }
+        input[type=number] {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 11px;
+            font-family: inherit;
+            width: 90px;
+            text-align: right;
+        }
+        input[type=number]:focus { outline: none; border-color: #3b82f6; }
+        .set-btn {
+            background: #1e3a5f;
+            border: 1px solid #3b82f6;
+            color: #60a5fa;
+            border-radius: 4px;
+            padding: 3px 7px;
+            font-size: 10px;
+            cursor: pointer;
+            font-family: inherit;
+            flex-shrink: 0;
+        }
+        .set-btn:hover { background: #1d4ed8; color: #fff; }
+
+        .divider { border: none; border-top: 1px solid #1c1c1c; margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span class="header-title">Token Dashboard</span>
+        <span class="status-dot" id="dot"></span>
+    </div>
+
+    <!-- Total cost hero -->
+    <div class="total-cost-box">
+        <div>
+            <div class="total-cost-label">Total Session Cost</div>
+            <div class="total-cost-value" id="total-cost">$0.0000</div>
+        </div>
+        <div style="text-align:right">
+            <div class="total-calls" id="total-calls">0 calls</div>
+            <div class="total-calls" id="total-tokens">0 tokens</div>
+        </div>
+    </div>
+
+    <!-- Budget progress -->
+    <div class="progress-section">
+        <div class="progress-header">
+            <span>Token Budget</span>
+            <span id="budget-label">0 / 100,000</span>
+        </div>
+        <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="bar"></div>
+        </div>
+    </div>
+
+    <!-- ── AUDIO section ── -->
+    <div class="section-title">Audio (Sonnet)</div>
+
+    <table class="stat-table">
+        <tr><td class="stat-key">Calls</td>              <td class="stat-val" id="s-calls">0</td></tr>
+        <tr><td class="stat-key">Fresh Input</td>        <td class="stat-val" id="s-fresh">0</td></tr>
+        <tr><td class="stat-key">Cache Write</td>        <td class="stat-val blue" id="s-cwrite">0</td></tr>
+        <tr><td class="stat-key">Cache Read</td>         <td class="stat-val green" id="s-cread">0</td></tr>
+        <tr><td class="stat-key">Output</td>             <td class="stat-val" id="s-output">0</td></tr>
+    </table>
+
+    <div class="cache-row">
+        <div class="cache-pill hit">
+            <div class="pill-label">Cache Hits</div>
+            <div class="pill-value green" id="s-hits">0</div>
+        </div>
+        <div class="cache-pill write">
+            <div class="pill-label">Writes</div>
+            <div class="pill-value blue" id="s-writes">0</div>
+        </div>
+        <div class="cache-pill miss">
+            <div class="pill-label">Misses</div>
+            <div class="pill-value orange" id="s-misses">0</div>
+        </div>
+    </div>
+
+    <div class="cost-line">
+        <span class="cost-line-label">Audio Cost</span>
+        <span class="cost-line-value" id="s-cost">$0.0000</span>
+    </div>
+
+    <!-- ── ANALYZE section ── -->
+    <div class="section-title">Analyze (Sonnet)</div>
+
+    <table class="stat-table">
+        <tr><td class="stat-key">Calls</td>              <td class="stat-val" id="a-calls">0</td></tr>
+        <tr><td class="stat-key">Fresh Input</td>        <td class="stat-val" id="a-fresh">0</td></tr>
+        <tr><td class="stat-key">Cache Write</td>        <td class="stat-val blue" id="a-cwrite">0</td></tr>
+        <tr><td class="stat-key">Cache Read</td>         <td class="stat-val green" id="a-cread">0</td></tr>
+        <tr><td class="stat-key">Output</td>             <td class="stat-val" id="a-output">0</td></tr>
+    </table>
+
+    <div class="cache-row">
+        <div class="cache-pill hit">
+            <div class="pill-label">Cache Hits</div>
+            <div class="pill-value green" id="a-hits">0</div>
+        </div>
+        <div class="cache-pill write">
+            <div class="pill-label">Writes</div>
+            <div class="pill-value blue" id="a-writes">0</div>
+        </div>
+        <div class="cache-pill miss">
+            <div class="pill-label">Misses</div>
+            <div class="pill-value orange" id="a-misses">0</div>
+        </div>
+    </div>
+
+    <div class="cost-line">
+        <span class="cost-line-label">Analyze Cost</span>
+        <span class="cost-line-value" id="a-cost">$0.0000</span>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <button id="reset-btn">Reset All</button>
+        <button id="reset-analyze-btn">Reset Analyze</button>
+    </div>
+
+    <!-- Settings -->
+    <div class="section-title">Settings</div>
+    <div class="slider-section">
+        <div class="slider-row">
+            <span class="slider-label">max_tokens</span>
+            <input type="range" id="max-tokens-slider" min="100" max="4000" step="50" value="400" />
+            <input type="number" id="max-tokens-input" min="100" max="32000" step="50" value="400" />
+        </div>
+        <div class="slider-row">
+            <span class="slider-label">session_budget</span>
+            <input type="range" id="budget-slider" min="1000" max="200000" step="1000" value="100000" />
+            <input type="number" id="budget-input" min="1000" step="1000" value="100000" />
+            <button class="set-btn" id="budget-set-btn">Set</button>
+        </div>
+    </div>
+
+    <script>
+        let ipcRenderer;
+        try {
+            ipcRenderer = require('electron').ipcRenderer;
+        } catch (e) {
+            try { ipcRenderer = window.parent.require('electron').ipcRenderer; }
+            catch (e2) { ipcRenderer = null; }
+        }
+
+        let currentBudget = 100000;
+
+        // Sonnet 4.6 pricing per million tokens
+        const PRICE = { fresh: 3, cacheWrite: 3.75, cacheRead: 0.30, output: 15 };
+
+        function calcCost(fresh, cacheWrite, cacheRead, output) {
+            return (fresh * PRICE.fresh + cacheWrite * PRICE.cacheWrite +
+                    cacheRead * PRICE.cacheRead + output * PRICE.output) / 1_000_000;
+        }
+
+        function fmt(n) { return (n || 0).toLocaleString(); }
+        function fmtCost(c) { return '$' + Math.max(0, c).toFixed(4); }
+
+        function updateUI(stats) {
+            // Audio
+            const sFresh  = stats.freshTokens      || 0;
+            const sCWrite = stats.cacheWriteTokens || 0;
+            const sCRead  = stats.cacheReadTokens  || 0;
+            const sOut    = stats.output           || 0;
+            const sCalls  = stats.calls            || 0;
+            const sHits   = stats.cacheHits        || 0;
+            const sMisses = Math.max(0, sCalls - sHits);
+            const sCWrites = sCWrite > 0 ? Math.ceil(sCWrite / 3000) : 0; // approx write events
+            const sCost   = calcCost(sFresh, sCWrite, sCRead, sOut);
+
+            document.getElementById('s-calls').textContent  = fmt(sCalls);
+            document.getElementById('s-fresh').textContent  = fmt(sFresh);
+            document.getElementById('s-cwrite').textContent = fmt(sCWrite);
+            document.getElementById('s-cread').textContent  = fmt(sCRead);
+            document.getElementById('s-output').textContent = fmt(sOut);
+            document.getElementById('s-hits').textContent   = sHits;
+            document.getElementById('s-writes').textContent = sCWrites;
+            document.getElementById('s-misses').textContent = sMisses;
+            document.getElementById('s-cost').textContent   = fmtCost(sCost);
+
+            // Analyze
+            const a       = stats.analyze || {};
+            const aFresh  = a.freshTokens      || 0;
+            const aCWrite = a.cacheWriteTokens || 0;
+            const aCRead  = a.cacheReadTokens  || 0;
+            const aOut    = a.output           || 0;
+            const aCalls  = a.calls            || 0;
+            const aHits   = a.cacheHits        || 0;
+            const aWrites = a.cacheWrites      || 0;
+            const aMisses = Math.max(0, aCalls - aHits);
+            const aCostAccurate = calcCost(aFresh, aCWrite, aCRead, aOut);
+
+            document.getElementById('a-calls').textContent  = fmt(aCalls);
+            document.getElementById('a-fresh').textContent  = fmt(aFresh);
+            document.getElementById('a-cwrite').textContent = fmt(aCWrite);
+            document.getElementById('a-cread').textContent  = fmt(aCRead);
+            document.getElementById('a-output').textContent = fmt(aOut);
+            document.getElementById('a-hits').textContent   = aHits;
+            document.getElementById('a-writes').textContent = aWrites;
+            document.getElementById('a-misses').textContent = aMisses;
+            document.getElementById('a-cost').textContent   = fmtCost(aCostAccurate);
+
+            // Total
+            const totalCost = sCost + aCostAccurate;
+            const totalCalls = sCalls + aCalls;
+            const totalTokens = (stats.input || 0) + sOut + (a.input || 0) + aOut;
+            document.getElementById('total-cost').textContent  = fmtCost(totalCost);
+            document.getElementById('total-calls').textContent = totalCalls + ' calls';
+            document.getElementById('total-tokens').textContent = fmt(totalTokens) + ' tok';
+
+            // Budget progress
+            const budgetTokens = (stats.input || 0) + sOut;
+            const pct = currentBudget > 0 ? Math.min(100, (budgetTokens / currentBudget) * 100) : 0;
+            document.getElementById('budget-label').textContent = fmt(budgetTokens) + ' / ' + fmt(currentBudget);
+            const bar = document.getElementById('bar');
+            bar.style.width = pct + '%';
+            bar.className = 'progress-bar-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warn' : '');
+        }
+
+        async function refresh() {
+            if (!ipcRenderer) return;
+            try {
+                const stats = await ipcRenderer.invoke('token:get-stats');
+                if (stats) updateUI(stats);
+            } catch (e) {}
+        }
+
+        document.getElementById('reset-btn').addEventListener('click', async () => {
+            if (!ipcRenderer) return;
+            await ipcRenderer.invoke('token:reset-session');
+            updateUI({ input: 0, output: 0, calls: 0, freshTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, cacheHits: 0, analyze: {} });
+        });
+
+        document.getElementById('reset-analyze-btn').addEventListener('click', async () => {
+            if (!ipcRenderer) return;
+            await ipcRenderer.invoke('token:reset-analyze');
+            const stats = await ipcRenderer.invoke('token:get-stats');
+            if (stats) updateUI({ ...stats, analyze: {} });
+        });
+
+        const maxSlider = document.getElementById('max-tokens-slider');
+        const maxInput  = document.getElementById('max-tokens-input');
+        async function applyMaxTokens(val) {
+            const v = Math.max(100, Math.min(32000, parseInt(val) || 400));
+            maxSlider.value = Math.min(v, 4000);
+            maxInput.value  = v;
+            if (ipcRenderer) await ipcRenderer.invoke('token:set-config', { max_tokens: v });
+        }
+        maxSlider.addEventListener('input',  () => applyMaxTokens(maxSlider.value));
+        maxInput.addEventListener('change',  () => applyMaxTokens(maxInput.value));
+
+        const budgetSlider = document.getElementById('budget-slider');
+        const budgetInput  = document.getElementById('budget-input');
+        async function applyBudget(val) {
+            const v = Math.max(1000, parseInt(val) || 100000);
+            currentBudget = v;
+            budgetSlider.max   = Math.max(200000, v);
+            budgetSlider.value = Math.min(v, 200000);
+            budgetInput.value  = v;
+            if (ipcRenderer) await ipcRenderer.invoke('token:set-config', { session_budget: v });
+        }
+        budgetSlider.addEventListener('input',  () => applyBudget(budgetSlider.value));
+        budgetInput.addEventListener('change',  () => applyBudget(budgetInput.value));
+        budgetInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyBudget(budgetInput.value); });
+        document.getElementById('budget-set-btn').addEventListener('click', () => applyBudget(budgetInput.value));
+
+        async function loadConfig() {
+            if (!ipcRenderer) return;
+            try {
+                const cfg = await ipcRenderer.invoke('token:get-config');
+                if (cfg) {
+                    maxSlider.value    = Math.min(cfg.max_tokens, 4000);
+                    maxInput.value     = cfg.max_tokens;
+                    currentBudget      = cfg.session_budget;
+                    budgetSlider.max   = Math.max(200000, cfg.session_budget);
+                    budgetSlider.value = cfg.session_budget;
+                    budgetInput.value  = cfg.session_budget;
+                }
+            } catch (e) {}
+        }
+
+        loadConfig();
+        refresh();
+        setInterval(refresh, 2000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+if (require('electron-squirrel-startup')) {
+    process.exit(0);
+}
+
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { createWindow, updateGlobalShortcuts } = require('./utils/window');
+const { setupGeminiIpcHandlers, stopMacOSAudioCapture, sendToRenderer, getSessionStats, resetAnalyzeSession, resetSession, TOKEN_CONFIG } = require('./utils/gemini');
+const storage = require('./storage');
+
+const geminiSessionRef = { current: null };
+let mainWindow = null;
+
+function createMainWindow() {
+    mainWindow = createWindow(sendToRenderer, geminiSessionRef);
+    return mainWindow;
+}
+
+app.whenReady().then(async () => {
+    // Initialize storage (checks version, resets if needed)
+    storage.initializeStorage();
+
+    // Load saved token config into TOKEN_CONFIG
+    const savedPrefs = storage.getPreferences();
+    if (savedPrefs.maxTokens) TOKEN_CONFIG.max_tokens = savedPrefs.maxTokens;
+    if (savedPrefs.sessionBudget) TOKEN_CONFIG.session_budget = savedPrefs.sessionBudget;
+
+    // Trigger screen recording permission prompt on macOS if not already granted
+    if (process.platform === 'darwin') {
+        const { desktopCapturer } = require('electron');
+        desktopCapturer.getSources({ types: ['screen'] }).catch(() => {});
+    }
+
+    createMainWindow();
+    setupGeminiIpcHandlers(geminiSessionRef);
+    setupStorageIpcHandlers();
+    setupGeneralIpcHandlers();
+});
+
+app.on('window-all-closed', () => {
+    stopMacOSAudioCapture();
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
+});
+
+app.on('before-quit', () => {
+    stopMacOSAudioCapture();
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow();
+    }
+});
+
+function setupStorageIpcHandlers() {
+    // ============ CONFIG ============
+    ipcMain.handle('storage:get-config', async () => {
+        try {
+            return { success: true, data: storage.getConfig() };
+        } catch (error) {
+            console.error('Error getting config:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-config', async (event, config) => {
+        try {
+            storage.setConfig(config);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting config:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:update-config', async (event, key, value) => {
+        try {
+            storage.updateConfig(key, value);
+            return { success: true };
+        } catch (error) {
+            console.error('Error updating config:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ============ CREDENTIALS ============
+    ipcMain.handle('storage:get-credentials', async () => {
+        try {
+            return { success: true, data: storage.getCredentials() };
+        } catch (error) {
+            console.error('Error getting credentials:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-credentials', async (event, credentials) => {
+        try {
+            storage.setCredentials(credentials);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting credentials:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:get-api-key', async () => {
+        try {
+            return { success: true, data: storage.getApiKey() };
+        } catch (error) {
+            console.error('Error getting API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-api-key', async (event, apiKey) => {
+        try {
+            storage.setApiKey(apiKey);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:get-groq-api-key', async () => {
+        try {
+            return { success: true, data: storage.getGroqApiKey() };
+        } catch (error) {
+            console.error('Error getting Groq API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-groq-api-key', async (event, groqApiKey) => {
+        try {
+            storage.setGroqApiKey(groqApiKey);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting Groq API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:get-claude-api-key', async () => {
+        try {
+            return { success: true, data: storage.getClaudeApiKey() };
+        } catch (error) {
+            console.error('Error getting Claude API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-claude-api-key', async (event, claudeApiKey) => {
+        try {
+            storage.setClaudeApiKey(claudeApiKey);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting Claude API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:get-openai-api-key', async () => {
+        try {
+            return { success: true, data: storage.getOpenaiApiKey() };
+        } catch (error) {
+            console.error('Error getting OpenAI API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-openai-api-key', async (event, openaiApiKey) => {
+        try {
+            storage.setOpenaiApiKey(openaiApiKey);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting OpenAI API key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ============ PREFERENCES ============
+    ipcMain.handle('storage:get-preferences', async () => {
+        try {
+            return { success: true, data: storage.getPreferences() };
+        } catch (error) {
+            console.error('Error getting preferences:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-preferences', async (event, preferences) => {
+        try {
+            storage.setPreferences(preferences);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting preferences:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:update-preference', async (event, key, value) => {
+        try {
+            storage.updatePreference(key, value);
+            return { success: true };
+        } catch (error) {
+            console.error('Error updating preference:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ============ KEYBINDS ============
+    ipcMain.handle('storage:get-keybinds', async () => {
+        try {
+            return { success: true, data: storage.getKeybinds() };
+        } catch (error) {
+            console.error('Error getting keybinds:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:set-keybinds', async (event, keybinds) => {
+        try {
+            storage.setKeybinds(keybinds);
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting keybinds:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ============ HISTORY ============
+    ipcMain.handle('storage:get-all-sessions', async () => {
+        try {
+            return { success: true, data: storage.getAllSessions() };
+        } catch (error) {
+            console.error('Error getting sessions:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:get-session', async (event, sessionId) => {
+        try {
+            return { success: true, data: storage.getSession(sessionId) };
+        } catch (error) {
+            console.error('Error getting session:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:save-session', async (event, sessionId, data) => {
+        try {
+            storage.saveSession(sessionId, data);
+            return { success: true };
+        } catch (error) {
+            console.error('Error saving session:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:delete-session', async (event, sessionId) => {
+        try {
+            storage.deleteSession(sessionId);
+            return { success: true };
+        } catch (error) {
+            console.error('Error deleting session:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('storage:delete-all-sessions', async () => {
+        try {
+            storage.deleteAllSessions();
+            return { success: true };
+        } catch (error) {
+            console.error('Error deleting all sessions:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ============ LIMITS ============
+    ipcMain.handle('storage:get-today-limits', async () => {
+        try {
+            return { success: true, data: storage.getTodayLimits() };
+        } catch (error) {
+            console.error('Error getting today limits:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ============ CLEAR ALL ============
+    ipcMain.handle('storage:clear-all', async () => {
+        try {
+            storage.clearAllData();
+            return { success: true };
+        } catch (error) {
+            console.error('Error clearing all data:', error);
+            return { success: false, error: error.message };
+        }
+    });
+}
+
+function setupGeneralIpcHandlers() {
+    ipcMain.handle('token:get-stats', () => getSessionStats());
+    ipcMain.handle('token:get-config', () => ({
+        max_tokens: TOKEN_CONFIG.max_tokens,
+        session_budget: TOKEN_CONFIG.session_budget,
+    }));
+    ipcMain.handle('token:reset-session', () => { resetSession(); });
+    ipcMain.handle('token:reset-analyze', () => { resetAnalyzeSession(); });
+    ipcMain.handle('token:set-config', (event, cfg) => {
+        if (typeof cfg.max_tokens === 'number') {
+            TOKEN_CONFIG.max_tokens = cfg.max_tokens;
+            storage.updatePreference('maxTokens', cfg.max_tokens);
+        }
+        if (typeof cfg.session_budget === 'number') {
+            TOKEN_CONFIG.session_budget = cfg.session_budget;
+            storage.updatePreference('sessionBudget', cfg.session_budget);
+        }
+    });
+
+    ipcMain.handle('get-app-version', async () => {
+        return app.getVersion();
+    });
+
+    ipcMain.handle('quit-application', async event => {
+        try {
+            stopMacOSAudioCapture();
+            app.quit();
+            return { success: true };
+        } catch (error) {
+            console.error('Error quitting application:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('open-external', async (event, url) => {
+        try {
+            await shell.openExternal(url);
+            return { success: true };
+        } catch (error) {
+            console.error('Error opening external URL:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.on('update-keybinds', (event, newKeybinds) => {
+        if (mainWindow) {
+            // Also save to storage
+            storage.setKeybinds(newKeybinds);
+            updateGlobalShortcuts(newKeybinds, mainWindow, sendToRenderer, geminiSessionRef);
+        }
+    });
+
+    // Debug logging from renderer
+    ipcMain.on('log-message', (event, msg) => {
+        console.log(msg);
+    });
+
+    ipcMain.handle('validate-license', async (event, token) => {
+        const valid = storage.validateLicenseToken(token);
+        if (valid) {
+            storage.setProLicense({ token, activatedAt: Date.now() });
+        }
+        return { valid };
+    });
+
+    ipcMain.handle('get-daily-sessions', async () => {
+        return { count: storage.getDailySessionCount() };
+    });
+
+    ipcMain.handle('increment-session-count', async () => {
+        const count = storage.incrementDailySessionCount();
+        return { count };
+    });
+
+    ipcMain.handle('get-pro-model', async () => {
+        return { model: storage.getProModel() };
+    });
+
+    ipcMain.handle('set-pro-model', async (event, model) => {
+        storage.setProModel(model);
+        return { success: true };
+    });
+}
